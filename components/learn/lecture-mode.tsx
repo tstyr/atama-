@@ -11,7 +11,6 @@ import ReactMarkdown from "react-markdown";
 interface LectureModeProps {
   unit: Unit;
   progress: UserProgress | null;
-  sessionId: string | null;
   difficulty: string;
   onComplete: () => void;
 }
@@ -19,17 +18,12 @@ interface LectureModeProps {
 export function LectureMode({
   unit,
   progress,
-  sessionId,
   difficulty,
   onComplete,
 }: LectureModeProps) {
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);
   const [completed, setCompleted] = useState(false);
-
-  useEffect(() => {
-    loadLecture();
-  }, []);
 
   const loadLecture = async () => {
     try {
@@ -75,6 +69,11 @@ export function LectureMode({
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadLecture();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleComplete = async () => {
     try {

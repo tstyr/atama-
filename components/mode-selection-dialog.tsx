@@ -10,10 +10,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ClipboardCheck, BookOpen, Dumbbell, ArrowRight } from "lucide-react";
-import { Unit, UserProgress } from "@/lib/supabase";
+import type { Unit, UserProgress } from "@/lib/supabase";
 
 interface ModeSelectionDialogProps {
   open: boolean;
@@ -62,7 +61,8 @@ export function ModeSelectionDialog({
   ];
 
   const handleModeSelect = (modeId: string) => {
-    router.push(`/learn/${unit.id}?mode=${modeId}&difficulty=${selectedDifficulty}`);
+    const url = `/learn/${unit.id}?mode=${modeId}&difficulty=${selectedDifficulty}`;
+    router.push(url);
     onOpenChange(false);
   };
 
@@ -78,7 +78,7 @@ export function ModeSelectionDialog({
           {/* 難易度選択 */}
           <div className="space-y-3">
             <h3 className="text-sm font-semibold">難易度を選択</h3>
-            <Tabs value={selectedDifficulty} onValueChange={(v) => setSelectedDifficulty(v as any)}>
+            <Tabs value={selectedDifficulty} onValueChange={(v) => setSelectedDifficulty(v as 'basic' | 'standard' | 'advanced')}>
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="basic">初級</TabsTrigger>
                 <TabsTrigger value="standard">中級</TabsTrigger>

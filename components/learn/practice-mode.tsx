@@ -8,9 +8,25 @@ import { CheckCircle2, XCircle, Loader2, Trophy } from "lucide-react";
 import { supabase, Unit, UserProgress } from "@/lib/supabase";
 import { generatePracticeQuestion, evaluateAnswer } from "@/lib/gemini";
 
+interface Question {
+  question: string;
+  expectedAnswer: string;
+}
+
+interface Feedback {
+  isCorrect: boolean;
+  feedback: string;
+  weakPoint?: string;
+}
+
+interface EvaluationResult {
+  isCorrect: boolean;
+  feedback: string;
+  weakPoint?: string;
+}
+
 interface PracticeModeProps {
   unit: Unit;
-  progress: UserProgress | null;
   sessionId: string | null;
   difficulty: string;
   onComplete: () => void;
@@ -18,23 +34,18 @@ interface PracticeModeProps {
 
 export function PracticeMode({
   unit,
-  progress,
   sessionId,
   difficulty,
   onComplete,
 }: PracticeModeProps) {
-  const [question, setQuestion] = useState<any>(null);
+  const [question, setQuestion] = useState<Question | null>(null);
   const [userAnswer, setUserAnswer] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [feedback, setFeedback] = useState<any>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [questionCount, setQuestionCount] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showCompletion, setShowCompletion] = useState(false);
-
-  useEffect(() => {
-    loadNextQuestion();
-  }, []);
 
   const loadNextQuestion = async () => {
     try {
@@ -71,12 +82,17 @@ export function PracticeMode({
     }
   };
 
+  useEffect(() => {
+    loadNextQuestion();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSubmit = async () => {
     if (!userAnswer.trim()) return;
 
     setIsSubmitting(true);
     try {
-      const evaluation = await evaluateAnswer(
+      const evaluation: EvaluationResult = await evaluateAnswer(
         question.question,
         userAnswer,
         question.expectedAnswer

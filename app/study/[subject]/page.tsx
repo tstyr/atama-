@@ -195,14 +195,14 @@ export default function StudyPage() {
               <label className="text-sm font-medium mb-2 block">難易度</label>
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { value: "beginner", label: "初級" },
-                  { value: "intermediate", label: "中級" },
-                  { value: "advanced", label: "上級" },
+                  { value: "beginner" as const, label: "初級" },
+                  { value: "intermediate" as const, label: "中級" },
+                  { value: "advanced" as const, label: "上級" },
                 ].map((level) => (
                   <Button
                     key={level.value}
                     variant={difficulty === level.value ? "default" : "outline"}
-                    onClick={() => setDifficulty(level.value as any)}
+                    onClick={() => setDifficulty(level.value)}
                   >
                     {level.label}
                   </Button>

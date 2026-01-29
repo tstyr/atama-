@@ -1,16 +1,32 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
-import { supabase, Unit, UserProgress } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
+import type { Unit } from "@/lib/supabase";
 import { generateDiagnosticQuestions, evaluateAnswer } from "@/lib/gemini";
+
+interface Question {
+  question: string;
+  expectedAnswer: string;
+}
+
+interface Evaluation {
+  isCorrect: boolean;
+  feedback: string;
+  weakPoint?: string;
+}
+
+interface QuestionResult extends Question {
+  userAnswer: string;
+  evaluation: Evaluation;
+}
 
 interface DiagnosticModeProps {
   unit: Unit;
-  progress: UserProgress | null;
   sessionId: string | null;
   difficulty: string;
   onComplete: () => void;
@@ -18,24 +34,19 @@ interface DiagnosticModeProps {
 
 export function DiagnosticMode({
   unit,
-  progress,
   sessionId,
   difficulty,
   onComplete,
 }: DiagnosticModeProps) {
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [userAnswer, setUserAnswer] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [feedback, setFeedback] = useState<any>(null);
-  const [results, setResults] = useState<any[]>([]);
+  const [feedback, setFeedback] = useState<Evaluation | null>(null);
+  const [results, setResults] = useState<QuestionResult[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadQuestions();
-  }, []);
-
-  const loadQuestions = async () => {
+  const loadQuestions = useCallback(async () => {
     try {
       setLoading(true);
       const generatedQuestions = await generateDiagnosticQuestions(
@@ -50,7 +61,11 @@ export function DiagnosticMode({
     } finally {
       setLoading(false);
     }
-  };
+  }, [unit.subject, unit.unit_name, difficulty]);
+
+  useEffect(() => {
+    loadQuestions();
+  }, [loadQuestions]);
 
   const handleSubmit = async () => {
     if (!userAnswer.trim()) return;

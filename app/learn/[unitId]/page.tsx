@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/lib/supabase";
-import type { Unit, UserProgress } from "@/lib/supabase";
+import type { Unit } from "@/lib/supabase";
 import {
   generateDiagnosticQuestions,
   generateLecture,
@@ -19,6 +19,18 @@ import ReactMarkdown from 'react-markdown';
 
 type LearningMode = 'diagnostic' | 'lecture' | 'practice';
 
+interface DiagnosticResult {
+  isCorrect: boolean;
+  explanation: string;
+  weakPoint?: string;
+}
+
+interface PracticeResult {
+  isCorrect: boolean;
+  explanation: string;
+  weakPoint?: string;
+}
+
 export default function LearnPage() {
   const router = useRouter();
   const params = useParams();
@@ -27,8 +39,7 @@ export default function LearnPage() {
   const initialMode = (searchParams.get('mode') as LearningMode) || 'diagnostic';
 
   const [unit, setUnit] = useState<Unit | null>(null);
-  const [progress, setProgress] = useState<UserProgress | null>(null);
-  const [mode, setMode] = useState<LearningMode>(initialMode);
+  const [mode] = useState<LearningMode>(initialMode);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -45,7 +56,7 @@ export default function LearnPage() {
   // 演習フェーズ
   const [practiceQuestion, setPracticeQuestion] = useState<string>('');
   const [practiceAnswer, setPracticeAnswer] = useState<string>('');
-  const [practiceResult, setPracticeResult] = useState<any>(null);
+  const [practiceResult, setPracticeResult] = useState<PracticeResult | null>(null);
   const [practiceCount, setPracticeCount] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -85,7 +96,7 @@ export default function LearnPage() {
       if (unitError) throw unitError;
       setUnit(unitData);
 
-      let progressData = await supabase
+      const progressData = await supabase
         .from('user_progress')
         .select('*')
         .eq('user_id', session.user.id)
@@ -93,11 +104,10 @@ export default function LearnPage() {
         .single();
 
       if (progressData.data) {
-        setProgress(progressData.data);
         setPracticeCount(progressData.data.practice_count || 0);
         setCorrectCount(progressData.data.correct_count || 0);
       } else {
-        const { data: newProgress } = await supabase
+        await supabase
           .from('user_progress')
           .insert({
             user_id: session.user.id,
@@ -106,7 +116,6 @@ export default function LearnPage() {
           })
           .select()
           .single();
-        setProgress(newProgress);
       }
 
       await startSession(session.user.id, mode);
@@ -188,7 +197,8 @@ export default function LearnPage() {
         await supabase
           .from('user_progress')
           .update({ diagnostic_completed: true, progress_percentage: 20 })
-          .eq('id', progress?.id);
+          .eq('user_id', userId)
+        .eq('unit_id', unitId);
         
         router.push(`/map/${unit.subject}`);
       }
@@ -224,16 +234,24 @@ export default function LearnPage() {
   };
 
   const handleCompleteLecture = async () => {
-    if (!progress) return;
+    if (!userId || !unitId) return;
 
     try {
+      const { data: currentProgress } = await supabase
+        .from('user_progress')
+        .select('progress_percentage')
+        .eq('user_id', userId)
+        .eq('unit_id', unitId)
+        .single();
+
       await supabase
         .from('user_progress')
         .update({ 
           lecture_completed: true, 
-          progress_percentage: Math.max(progress.progress_percentage || 0, 50)
+          progress_percentage: Math.max(currentProgress?.progress_percentage || 0, 50)
         })
-        .eq('id', progress.id);
+        .eq('user_id', userId)
+        .eq('unit_id', unitId);
 
       router.push(`/map/${unit?.subject}`);
     } catch (error) {
@@ -331,7 +349,8 @@ export default function LearnPage() {
           last_studied_at: new Date().toISOString(),
           ...(shouldComplete && { mastered_at: new Date().toISOString() }),
         })
-        .eq('id', progress?.id);
+        .eq('user_id', userId)
+        .eq('unit_id', unitId);
 
       if (shouldComplete) {
         setShowComplete(true);
@@ -411,7 +430,14 @@ export default function LearnPage() {
 }
 
 // 診断フェーズ
-function DiagnosticPhase({ diagnosticQuestions, currentIndex, loading, onAnswer }: any) {
+interface DiagnosticPhaseProps {
+  diagnosticQuestions: string[];
+  currentIndex: number;
+  loading: boolean;
+  onAnswer: (answer: string) => void;
+}
+
+function DiagnosticPhase({ diagnosticQuestions, currentIndex, loading, onAnswer }: DiagnosticPhaseProps) {
   const [answer, setAnswer] = useState('');
 
   if (diagnosticQuestions.length === 0) {
@@ -485,7 +511,15 @@ function DiagnosticPhase({ diagnosticQuestions, currentIndex, loading, onAnswer 
 }
 
 // 講義フェーズ（スライド型）
-function LecturePhase({ slides, currentIndex, loading, onNext, onComplete }: any) {
+interface LecturePhaseProps {
+  slides: string[];
+  currentIndex: number;
+  loading: boolean;
+  onNext: () => void;
+  onComplete: () => void;
+}
+
+function LecturePhase({ slides, currentIndex, loading, onNext, onComplete }: LecturePhaseProps) {
   if (slides.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -506,7 +540,7 @@ function LecturePhase({ slides, currentIndex, loading, onNext, onComplete }: any
     >
       {/* スライド進捗 */}
       <div className="flex gap-2 justify-center">
-        {slides.map((_: any, i: number) => (
+        {slides.map((_: string, i: number) => (
           <div
             key={i}
             className={`h-2 w-12 rounded-full transition-all ${
@@ -545,7 +579,19 @@ function LecturePhase({ slides, currentIndex, loading, onNext, onComplete }: any
 }
 
 // 演習フェーズ
-function PracticePhase({ question, answer, setAnswer, result, practiceCount, correctCount, loading, onSubmit, onNext }: any) {
+interface PracticePhaseProps {
+  question: string;
+  answer: string;
+  setAnswer: (answer: string) => void;
+  result: PracticeResult | null;
+  practiceCount: number;
+  correctCount: number;
+  loading: boolean;
+  onSubmit: () => void;
+  onNext: () => void;
+}
+
+function PracticePhase({ question, answer, setAnswer, result, practiceCount, correctCount, loading, onSubmit, onNext }: PracticePhaseProps) {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -631,7 +677,14 @@ function PracticePhase({ question, answer, setAnswer, result, practiceCount, cor
 }
 
 // 完了フェーズ
-function CompletePhase({ unitName, practiceCount, correctCount, onBackToMap }: any) {
+interface CompletePhaseProps {
+  unitName: string;
+  practiceCount: number;
+  correctCount: number;
+  onBackToMap: () => void;
+}
+
+function CompletePhase({ unitName, practiceCount, correctCount, onBackToMap }: CompletePhaseProps) {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.8 }}

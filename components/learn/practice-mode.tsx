@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { CheckCircle2, XCircle, Loader2, Trophy } from "lucide-react";
-import { supabase, Unit, UserProgress } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
+import type { Unit } from "@/lib/supabase";
 import { generatePracticeQuestion, evaluateAnswer } from "@/lib/gemini";
 
 interface Question {

@@ -88,7 +88,16 @@ const subjects = [
 export default function SubjectsPage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
+interface SearchResult {
+  subject: string;
+  unit: string;
+  reason: string;
+}
+
+export default function SubjectsPage() {
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [highlightedSubject, setHighlightedSubject] = useState<string | null>(null);
 

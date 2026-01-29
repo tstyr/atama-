@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, ArrowRight, CheckCircle2, XCircle, Loader2, Trophy, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,16 +17,18 @@ import {
 } from "@/lib/gemini";
 import ReactMarkdown from 'react-markdown';
 
-type LearningPhase = 'diagnostic' | 'lecture' | 'practice' | 'complete';
+type LearningMode = 'diagnostic' | 'lecture' | 'practice';
 
 export default function LearnPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const unitId = params.unitId as string;
+  const initialMode = (searchParams.get('mode') as LearningMode) || 'diagnostic';
 
   const [unit, setUnit] = useState<Unit | null>(null);
   const [progress, setProgress] = useState<UserProgress | null>(null);
-  const [phase, setPhase] = useState<LearningPhase>('diagnostic');
+  const [mode, setMode] = useState<LearningMode>(initialMode);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
 
@@ -47,10 +49,23 @@ export default function LearnPage() {
   const [practiceCount, setPracticeCount] = useState(0);
   const [correctCount, setCorrectCount] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [showComplete, setShowComplete] = useState(false);
 
   useEffect(() => {
     loadUnitAndProgress();
   }, [unitId]);
+
+  useEffect(() => {
+    if (unit && userId) {
+      if (mode === 'diagnostic') {
+        handleStartDiagnostic();
+      } else if (mode === 'lecture') {
+        handleStartLecture();
+      } else if (mode === 'practice') {
+        handleStartPractice();
+      }
+    }
+  }, [mode, unit, userId]);
 
   const loadUnitAndProgress = async () => {
     try {
@@ -70,20 +85,17 @@ export default function LearnPage() {
       if (unitError) throw unitError;
       setUnit(unitData);
 
-      const { data: progressData } = await supabase
+      let progressData = await supabase
         .from('user_progress')
         .select('*')
         .eq('user_id', session.user.id)
         .eq('unit_id', unitId)
         .single();
 
-      if (progressData) {
-        setProgress(progressData);
-        if (progressData.diagnostic_completed && !progressData.lecture_completed) {
-          setPhase('lecture');
-        } else if (progressData.lecture_completed) {
-          setPhase('practice');
-        }
+      if (progressData.data) {
+        setProgress(progressData.data);
+        setPracticeCount(progressData.data.practice_count || 0);
+        setCorrectCount(progressData.data.correct_count || 0);
       } else {
         const { data: newProgress } = await supabase
           .from('user_progress')
@@ -97,7 +109,7 @@ export default function LearnPage() {
         setProgress(newProgress);
       }
 
-      await startSession(session.user.id, 'diagnostic');
+      await startSession(session.user.id, mode);
       setLoading(false);
     } catch (error) {
       console.error('Error loading unit:', error);
@@ -105,7 +117,7 @@ export default function LearnPage() {
     }
   };
 
-  const startSession = async (uid: string, sessionType: LearningPhase) => {
+  const startSession = async (uid: string, sessionType: LearningMode) => {
     try {
       const { data, error } = await supabase
         .from('study_sessions')
@@ -126,7 +138,7 @@ export default function LearnPage() {
   };
 
   const handleStartDiagnostic = async () => {
-    if (!unit) return;
+    if (!unit || diagnosticQuestions.length > 0) return;
     setLoading(true);
     try {
       const questionsText = await generateDiagnosticQuestions(unit.subject, unit.unit_name);
@@ -180,7 +192,7 @@ export default function LearnPage() {
           .update({ diagnostic_completed: true, progress_percentage: 20 })
           .eq('id', progress?.id);
         
-        await handleStartLecture();
+        router.push(`/map/${unit.subject}`);
       }
     } catch (error) {
       console.error('Error evaluating diagnostic:', error);
@@ -190,18 +202,16 @@ export default function LearnPage() {
   };
 
   const handleStartLecture = async () => {
-    if (!unit || !userId) return;
+    if (!unit || !userId || lectureSlides.length > 0) return;
     setLoading(true);
 
     try {
-      await startSession(userId, 'lecture');
       const lecture = await generateLecture(unit.subject, unit.unit_name, weakPoints);
       
       // 講義を複数のスライドに分割
       const slides = lecture.split(/(?=##\s)/g).filter(s => s.trim());
       setLectureSlides(slides.length > 0 ? slides : [lecture]);
       setCurrentSlideIndex(0);
-      setPhase('lecture');
     } catch (error) {
       console.error('Error generating lecture:', error);
     } finally {
@@ -221,11 +231,13 @@ export default function LearnPage() {
     try {
       await supabase
         .from('user_progress')
-        .update({ lecture_completed: true, progress_percentage: 50 })
+        .update({ 
+          lecture_completed: true, 
+          progress_percentage: Math.max(progress.progress_percentage || 0, 50)
+        })
         .eq('id', progress.id);
 
-      setPhase('practice');
-      await handleStartPractice();
+      router.push(`/map/${unit?.subject}`);
     } catch (error) {
       console.error('Error completing lecture:', error);
     }
@@ -236,8 +248,6 @@ export default function LearnPage() {
     setLoading(true);
 
     try {
-      await startSession(userId, 'practice');
-      
       const { data: previousErrors } = await supabase
         .from('question_attempts')
         .select('*')
@@ -296,10 +306,26 @@ export default function LearnPage() {
       setCorrectCount(newCorrectCount);
 
       const masteryScore = (newCorrectCount / newPracticeCount) * 100;
-      const newProgress = Math.min(50 + (newPracticeCount * 10), 100);
-
-      // 全問正解ボーナス: 5問連続正解で即座に100%
-      const isAllCorrect = newCorrectCount >= 5 && newCorrectCount === newPracticeCount;
+      
+      // 合格判定ロジック
+      let shouldComplete = false;
+      let newProgress = Math.min(50 + (newPracticeCount * 10), 100);
+      
+      // 1. 全問正解（5問以上）
+      if (newCorrectCount >= 5 && newCorrectCount === newPracticeCount) {
+        shouldComplete = true;
+        newProgress = 100;
+      }
+      // 2. 上級問題（難易度4-5）で8割以上正答
+      else if (unit.difficulty_level >= 4 && masteryScore >= 80 && newPracticeCount >= 5) {
+        shouldComplete = true;
+        newProgress = 100;
+      }
+      // 3. 通常問題で正答率80%以上、10問以上
+      else if (masteryScore >= 80 && newPracticeCount >= 10) {
+        shouldComplete = true;
+        newProgress = 100;
+      }
 
       await supabase
         .from('user_progress')
@@ -307,15 +333,15 @@ export default function LearnPage() {
           practice_count: newPracticeCount,
           correct_count: newCorrectCount,
           mastery_score: masteryScore,
-          progress_percentage: isAllCorrect ? 100 : newProgress,
-          status: isAllCorrect || masteryScore >= 80 ? 'mastered' : 'in_progress',
+          progress_percentage: newProgress,
+          status: shouldComplete ? 'mastered' : 'in_progress',
           last_studied_at: new Date().toISOString(),
-          ...(isAllCorrect && { mastered_at: new Date().toISOString() }),
+          ...(shouldComplete && { mastered_at: new Date().toISOString() }),
         })
         .eq('id', progress?.id);
 
-      if (isAllCorrect) {
-        setPhase('complete');
+      if (shouldComplete) {
+        setShowComplete(true);
       }
     } catch (error) {
       console.error('Error submitting practice:', error);
@@ -332,12 +358,16 @@ export default function LearnPage() {
     );
   }
 
+  if (showComplete) {
+    return <CompletePhase unitName={unit?.unit_name || ''} practiceCount={practiceCount} correctCount={correctCount} onBackToMap={() => router.push(`/map/${unit?.subject}`)} />;
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* ミニマルヘッダー */}
       <div className="border-b">
         <div className="container mx-auto px-4 py-3 flex items-center justify-between max-w-4xl">
-          <Button variant="ghost" size="sm" onClick={() => router.back()}>
+          <Button variant="ghost" size="sm" onClick={() => router.push(`/map/${unit?.subject}`)}>
             <ArrowLeft className="h-4 w-4 mr-2" />
             戻る
           </Button>
@@ -349,26 +379,26 @@ export default function LearnPage() {
       {/* メインコンテンツ */}
       <div className="container mx-auto px-4 py-8 max-w-3xl">
         <AnimatePresence mode="wait">
-          {phase === 'diagnostic' && (
+          {mode === 'diagnostic' && (
             <DiagnosticPhase
               diagnosticQuestions={diagnosticQuestions}
               currentIndex={currentDiagnosticIndex}
               loading={loading}
-              onStart={handleStartDiagnostic}
               onAnswer={handleDiagnosticAnswer}
             />
           )}
 
-          {phase === 'lecture' && (
+          {mode === 'lecture' && (
             <LecturePhase
               slides={lectureSlides}
               currentIndex={currentSlideIndex}
+              loading={loading}
               onNext={handleNextSlide}
               onComplete={handleCompleteLecture}
             />
           )}
 
-          {phase === 'practice' && (
+          {mode === 'practice' && (
             <PracticePhase
               question={practiceQuestion}
               answer={practiceAnswer}
@@ -381,15 +411,6 @@ export default function LearnPage() {
               onNext={handleStartPractice}
             />
           )}
-
-          {phase === 'complete' && (
-            <CompletePhase
-              unitName={unit?.unit_name || ''}
-              practiceCount={practiceCount}
-              correctCount={correctCount}
-              onBackToMap={() => router.push(`/map/${unit?.subject}`)}
-            />
-          )}
         </AnimatePresence>
       </div>
     </div>
@@ -397,7 +418,7 @@ export default function LearnPage() {
 }
 
 // 診断フェーズ
-function DiagnosticPhase({ diagnosticQuestions, currentIndex, loading, onStart, onAnswer }: any) {
+function DiagnosticPhase({ diagnosticQuestions, currentIndex, loading, onAnswer }: any) {
   const [answer, setAnswer] = useState('');
 
   if (diagnosticQuestions.length === 0) {
@@ -409,17 +430,7 @@ function DiagnosticPhase({ diagnosticQuestions, currentIndex, loading, onStart, 
         className="flex items-center justify-center min-h-[60vh]"
       >
         <Card className="p-12 max-w-2xl w-full text-center space-y-6">
-          <div className="space-y-3">
-            <h2 className="text-3xl font-bold">理解度診断</h2>
-            <p className="text-muted-foreground text-lg">
-              まず、現在の理解度を診断します。<br />
-              3問の問題に答えてください。
-            </p>
-          </div>
-          <Button onClick={onStart} disabled={loading} size="lg" className="w-full h-14 text-lg">
-            {loading ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
-            診断を開始
-          </Button>
+          {loading && <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />}
         </Card>
       </motion.div>
     );
@@ -481,7 +492,15 @@ function DiagnosticPhase({ diagnosticQuestions, currentIndex, loading, onStart, 
 }
 
 // 講義フェーズ（スライド型）
-function LecturePhase({ slides, currentIndex, onNext, onComplete }: any) {
+function LecturePhase({ slides, currentIndex, loading, onNext, onComplete }: any) {
+  if (slides.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   const isLastSlide = currentIndex === slides.length - 1;
 
   return (

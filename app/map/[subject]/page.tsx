@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Lock, Play, CheckCircle2, Clock, ArrowLeft, Trophy } from "lucide-react";
+import { Lock, Trophy, ArrowLeft, Brain, BookOpen, PenTool } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/lib/supabase";
 import type { Unit, UserProgress } from "@/lib/supabase";
 
@@ -63,42 +64,13 @@ export default function UnitMapPage() {
     }
   };
 
-  const getStatusIcon = (status?: string, progress?: number) => {
-    if (progress === 100 || status === 'mastered') {
-      return <Trophy className="h-5 w-5 text-[hsl(var(--success))]" />;
-    }
-    switch (status) {
-      case 'locked':
-        return <Lock className="h-5 w-5 opacity-50" />;
-      case 'available':
-      case 'in_progress':
-        return <Play className="h-5 w-5" />;
-      default:
-        return <Play className="h-5 w-5" />;
-    }
-  };
-
-  const getCardStyle = (status?: string, progress?: number) => {
-    if (progress === 100 || status === 'mastered') {
-      return 'bg-[hsl(var(--success))] text-[hsl(var(--success-foreground))] border-[hsl(var(--success))]';
-    }
-    switch (status) {
-      case 'locked':
-        return 'bg-card opacity-50';
-      case 'in_progress':
-        return 'bg-primary/10 border-primary';
-      default:
-        return 'bg-card hover:bg-accent';
-    }
-  };
-
-  const handleUnitClick = (unit: UnitWithProgress) => {
+  const handleModeClick = (unit: UnitWithProgress, mode: 'diagnostic' | 'lecture' | 'practice') => {
     const status = unit.progress?.status || 'available';
     if (status === 'locked') {
       alert('前提単元を完了してください');
       return;
     }
-    router.push(`/learn/${unit.id}`);
+    router.push(`/learn/${unit.id}?mode=${mode}`);
   };
 
   if (loading) {
@@ -143,24 +115,17 @@ export default function UnitMapPage() {
               <span className="text-muted-foreground">全体の進捗</span>
               <span className="font-medium">{overallProgress}%</span>
             </div>
-            <div className="h-3 bg-muted rounded-full overflow-hidden">
-              <motion.div
-                className="h-full bg-[hsl(var(--success))]"
-                initial={{ width: 0 }}
-                animate={{ width: `${overallProgress}%` }}
-                transition={{ duration: 1, ease: "easeOut" }}
-              />
-            </div>
+            <Progress value={overallProgress} className="h-3" />
           </div>
         </div>
 
         {/* 単元カードグリッド */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {units.map((unit, index) => {
             const status = unit.progress?.status || 'available';
             const progress = unit.progress?.progress_percentage || 0;
-            const masteryScore = unit.progress?.mastery_score || 0;
             const isMastered = progress === 100 || status === 'mastered';
+            const isLocked = status === 'locked';
 
             return (
               <motion.div
@@ -170,52 +135,75 @@ export default function UnitMapPage() {
                 transition={{ delay: index * 0.02 }}
               >
                 <Card
-                  className={`p-5 cursor-pointer transition-all hover:scale-105 border-2 ${getCardStyle(status, progress)} ${
-                    status === 'locked' ? 'cursor-not-allowed' : ''
+                  className={`p-6 transition-all border-2 ${
+                    isMastered
+                      ? 'bg-[hsl(var(--success))]/10 border-[hsl(var(--success))]'
+                      : isLocked
+                      ? 'opacity-50 bg-muted'
+                      : 'hover:shadow-lg'
                   }`}
-                  onClick={() => handleUnitClick(unit)}
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex-1 pr-2">
-                      <h3 className="font-bold text-base mb-1 leading-tight">{unit.unit_name}</h3>
-                      <p className="text-xs opacity-80 line-clamp-2">{unit.description}</p>
+                  {/* ヘッダー */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <h3 className="font-bold text-lg mb-1 leading-tight">{unit.unit_name}</h3>
+                      <p className="text-sm text-muted-foreground line-clamp-2">{unit.description}</p>
                     </div>
-                    <div className="flex-shrink-0">
-                      {getStatusIcon(status, progress)}
-                    </div>
+                    {isMastered && (
+                      <Trophy className="h-6 w-6 text-[hsl(var(--success))] flex-shrink-0 ml-2" />
+                    )}
+                    {isLocked && (
+                      <Lock className="h-6 w-6 text-muted-foreground flex-shrink-0 ml-2" />
+                    )}
                   </div>
 
                   {/* 進捗バー */}
-                  {!isMastered && status !== 'locked' && (
-                    <div className="space-y-1 mb-3">
-                      <div className="flex justify-between text-xs">
-                        <span className="opacity-70">進捗</span>
-                        <span className="font-medium">{progress}%</span>
-                      </div>
-                      <div className="h-1.5 bg-background/30 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-primary transition-all duration-500"
-                          style={{ width: `${progress}%` }}
-                        />
-                      </div>
+                  <div className="mb-4">
+                    <div className="flex justify-between text-xs mb-2">
+                      <span className="text-muted-foreground">進捗</span>
+                      <span className="font-medium">{progress}%</span>
                     </div>
-                  )}
+                    <Progress value={progress} className="h-2" />
+                  </div>
 
-                  {/* 完了バッジ */}
-                  {isMastered && (
-                    <div className="mb-3 flex items-center gap-2 text-xs font-medium">
-                      <CheckCircle2 className="h-4 w-4" />
-                      <span>習得完了！</span>
-                    </div>
-                  )}
+                  {/* クイックアクセスボタン */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleModeClick(unit, 'diagnostic')}
+                      disabled={isLocked}
+                      className="flex flex-col items-center gap-1 h-auto py-3"
+                    >
+                      <Brain className="h-4 w-4" />
+                      <span className="text-xs">診断</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleModeClick(unit, 'lecture')}
+                      disabled={isLocked}
+                      className="flex flex-col items-center gap-1 h-auto py-3"
+                    >
+                      <BookOpen className="h-4 w-4" />
+                      <span className="text-xs">講義</span>
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleModeClick(unit, 'practice')}
+                      disabled={isLocked}
+                      className="flex flex-col items-center gap-1 h-auto py-3"
+                    >
+                      <PenTool className="h-4 w-4" />
+                      <span className="text-xs">演習</span>
+                    </Button>
+                  </div>
 
                   {/* メタ情報 */}
-                  <div className="flex items-center gap-3 text-xs opacity-70">
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      <span>{unit.estimated_time}分</span>
-                    </div>
-                    <span>Lv.{unit.difficulty_level}</span>
+                  <div className="mt-4 pt-4 border-t flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{unit.estimated_time}分</span>
+                    <span>難易度 Lv.{unit.difficulty_level}</span>
                   </div>
                 </Card>
               </motion.div>

@@ -12,7 +12,7 @@ import type { Unit, UserProgress } from "@/lib/supabase";
 import {
   generateDiagnosticQuestions,
   generateLecture,
-  generatePractice,
+  generatePracticeQuestion,
   evaluateAnswer,
 } from "@/lib/gemini";
 import ReactMarkdown from 'react-markdown';
@@ -141,9 +141,8 @@ export default function LearnPage() {
     if (!unit || diagnosticQuestions.length > 0) return;
     setLoading(true);
     try {
-      const questionsText = await generateDiagnosticQuestions(unit.subject, unit.unit_name);
-      const questions = questionsText.split(/問題[1-3]:/g).filter(q => q.trim()).slice(0, 3);
-      setDiagnosticQuestions(questions);
+      const questions = await generateDiagnosticQuestions(unit.subject, unit.unit_name, 'standard', 3);
+      setDiagnosticQuestions(questions.map((q: { question: string }) => q.question));
       setDiagnosticAnswers(new Array(3).fill(''));
     } catch (error) {
       console.error('Error generating diagnostic:', error);
@@ -162,10 +161,9 @@ export default function LearnPage() {
     setLoading(true);
     try {
       const result = await evaluateAnswer(
-        `問題${currentDiagnosticIndex + 1}`,
+        diagnosticQuestions[currentDiagnosticIndex],
         answer,
-        unit.subject,
-        unit.unit_name
+        'Expected answer based on the question'
       );
 
       await supabase.from('question_attempts').insert({
@@ -206,10 +204,10 @@ export default function LearnPage() {
     setLoading(true);
 
     try {
-      const lecture = await generateLecture(unit.subject, unit.unit_name, weakPoints);
+      const lecture = await generateLecture(unit.subject, unit.unit_name, unit.description || '', 'standard');
       
       // 講義を複数のスライドに分割
-      const slides = lecture.split(/(?=##\s)/g).filter(s => s.trim());
+      const slides = lecture.split(/(?=##\s)/g).filter((s: string) => s.trim());
       setLectureSlides(slides.length > 0 ? slides : [lecture]);
       setCurrentSlideIndex(0);
     } catch (error) {
@@ -256,14 +254,10 @@ export default function LearnPage() {
         .eq('is_correct', false)
         .limit(3);
 
-      const errorData = previousErrors?.map(e => ({
-        question: e.question_text,
-        userAnswer: e.user_answer || '',
-        weakPoint: e.weak_point_identified || '',
-      }));
+      const weakPoints = previousErrors?.map(e => e.weak_point_identified).filter(Boolean) || [];
 
-      const question = await generatePractice(unit.subject, unit.unit_name, errorData);
-      setPracticeQuestion(question);
+      const questionData = await generatePracticeQuestion(unit.subject, unit.unit_name, 'standard', weakPoints);
+      setPracticeQuestion(questionData.question);
       setPracticeAnswer('');
       setPracticeResult(null);
     } catch (error) {
@@ -281,8 +275,7 @@ export default function LearnPage() {
       const result = await evaluateAnswer(
         practiceQuestion,
         practiceAnswer,
-        unit.subject,
-        unit.unit_name
+        'Expected answer based on the question'
       );
 
       setPracticeResult(result);

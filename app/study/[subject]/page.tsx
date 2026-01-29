@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { supabase } from "@/lib/supabase";
-import { generateLecture, generatePractice, evaluateAnswer } from "@/lib/gemini";
+import { generateLecture, generatePracticeQuestion, evaluateAnswer } from "@/lib/gemini";
 
 const subjectNames: Record<string, string> = {
   "english-communication": "英語コミュニケーション",
@@ -66,11 +66,11 @@ export default function StudyPage() {
 
     try {
       if (mode === "lecture") {
-        const lectureContent = await generateLecture(subjectName, unit, difficulty);
+        const lectureContent = await generateLecture(subjectName, unit, '', difficulty);
         setContent(lectureContent);
       } else {
-        const practiceContent = await generatePractice(subjectName, unit, difficulty);
-        setQuestion(practiceContent);
+        const practiceData = await generatePracticeQuestion(subjectName, unit, difficulty);
+        setQuestion(practiceData.question);
       }
     } catch (error) {
       console.error("Error generating content:", error);
@@ -88,7 +88,7 @@ export default function StudyPage() {
 
     setLoading(true);
     try {
-      const result = await evaluateAnswer(question, userAnswer, subjectName, unit);
+      const result = await evaluateAnswer(question, userAnswer, 'Expected answer based on the question');
       setEvaluation(result);
 
       const studyTime = Math.floor((Date.now() - startTime) / 1000);

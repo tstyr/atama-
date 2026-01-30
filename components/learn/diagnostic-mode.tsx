@@ -8,6 +8,7 @@ import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Unit } from "@/lib/supabase";
 import { generateDiagnosticQuestions, evaluateAnswer } from "@/lib/gemini";
+import { MathContent } from "@/components/math-content";
 
 interface Question {
   question: string;
@@ -174,11 +175,10 @@ export function DiagnosticMode({
       {/* 問題カード */}
       <Card>
         <CardContent className="pt-6 space-y-6">
-          <div className="prose prose-sm max-w-none">
-            <p className="text-lg leading-relaxed whitespace-pre-wrap">
-              {currentQuestion.question}
-            </p>
-          </div>
+          <MathContent 
+            content={currentQuestion.question}
+            className="text-lg leading-relaxed"
+          />
 
           {!feedback ? (
             <>
@@ -227,9 +227,10 @@ export function DiagnosticMode({
               {/* AIフィードバック */}
               <div className="bg-accent/50 rounded-lg p-4 space-y-2">
                 <p className="text-sm font-semibold">解説</p>
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {feedback.feedback}
-                </p>
+                <MathContent 
+                  content={feedback.feedback}
+                  className="text-sm leading-relaxed"
+                />
               </div>
 
               <Button onClick={handleNext} className="w-full" size="lg">

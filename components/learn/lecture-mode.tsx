@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { supabase, Unit, UserProgress } from "@/lib/supabase";
 import { generateLecture } from "@/lib/gemini";
+import { MathContent } from "@/components/math-content";
 import ReactMarkdown from "react-markdown";
 
 interface LectureModeProps {
@@ -124,9 +125,7 @@ export function LectureMode({
     <div className="space-y-6">
       <Card>
         <CardContent className="pt-6">
-          <div className="prose prose-sm max-w-none dark:prose-invert">
-            <ReactMarkdown>{content}</ReactMarkdown>
-          </div>
+          <MathContent content={content} className="prose prose-sm max-w-none dark:prose-invert" />
         </CardContent>
       </Card>
 

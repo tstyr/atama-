@@ -8,10 +8,15 @@ import { CheckCircle2, XCircle, Loader2, Trophy } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { Unit } from "@/lib/supabase";
 import { generatePracticeQuestion, evaluateAnswer } from "@/lib/gemini";
+import { MathContent } from "@/components/math-content";
 
 interface Question {
+  type: 'choice' | 'text';
   question: string;
-  expectedAnswer: string;
+  choices?: string[];
+  correctAnswer?: number;
+  expectedAnswer?: string;
+  explanation?: string;
 }
 
 interface Feedback {
@@ -42,6 +47,7 @@ export function PracticeMode({
 }: PracticeModeProps) {
   const [question, setQuestion] = useState<Question | null>(null);
   const [userAnswer, setUserAnswer] = useState("");
+  const [selectedChoice, setSelectedChoice] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [questionCount, setQuestionCount] = useState(0);
@@ -76,9 +82,16 @@ export function PracticeMode({
         weakPoints
       );
 
+      console.log('Generated question:', newQuestion); // デバッグ用
       setQuestion(newQuestion);
     } catch (error) {
       console.error('Error loading question:', error);
+      // エラー時のフォールバック
+      setQuestion({
+        type: 'text',
+        question: '問題の読み込みに失敗しました。もう一度お試しください。',
+        expectedAnswer: ''
+      });
     } finally {
       setLoading(false);
     }
@@ -89,6 +102,42 @@ export function PracticeMode({
   }, [loadNextQuestion]);
 
   const handleSubmit = async () => {
+    if (!question) return;
+    
+    // 選択肢問題の場合
+    if (question.type === 'choice') {
+      if (selectedChoice === null) return;
+      
+      const isCorrect = selectedChoice === question.correctAnswer;
+      const normalizedFeedback: Feedback = {
+        isCorrect,
+        feedback: question.explanation || (isCorrect ? '正解です！' : '不正解です。'),
+        explanation: question.explanation || (isCorrect ? '正解です！' : '不正解です。'),
+      };
+
+      // 回答を記録
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        await supabase.from('question_attempts').insert({
+          user_id: session.user.id,
+          unit_id: unit.id,
+          session_id: sessionId,
+          question_type: 'practice',
+          question_text: question.question,
+          user_answer: question.choices?.[selectedChoice] || '',
+          is_correct: isCorrect,
+          ai_feedback: normalizedFeedback.feedback,
+          time_spent_seconds: 0,
+        });
+
+        updateProgress(isCorrect);
+      }
+
+      setFeedback(normalizedFeedback);
+      return;
+    }
+
+    // 記述問題の場合
     if (!userAnswer.trim()) return;
 
     setIsSubmitting(true);
@@ -96,7 +145,7 @@ export function PracticeMode({
       const evaluationResult: EvaluationResult = await evaluateAnswer(
         question.question,
         userAnswer,
-        question.expectedAnswer
+        question.expectedAnswer || ''
       );
 
       // EvaluationResultをFeedbackに変換
@@ -123,27 +172,7 @@ export function PracticeMode({
           time_spent_seconds: 0,
         });
 
-        // 進捗を更新
-        const newCorrectCount = correctCount + (normalizedFeedback.isCorrect ? 1 : 0);
-        const newQuestionCount = questionCount + 1;
-        const masteryScore = (newCorrectCount / newQuestionCount) * 100;
-        const progressPercentage = Math.min(40 + (newQuestionCount * 5), 100);
-
-        await supabase
-          .from('user_progress')
-          .upsert({
-            user_id: session.user.id,
-            unit_id: unit.id,
-            practice_count: newQuestionCount,
-            correct_count: newCorrectCount,
-            mastery_score: masteryScore,
-            progress_percentage: progressPercentage,
-            status: progressPercentage >= 80 ? 'mastered' : 'in_progress',
-            mastered_at: progressPercentage >= 80 ? new Date().toISOString() : null,
-          });
-
-        setCorrectCount(newCorrectCount);
-        setQuestionCount(newQuestionCount);
+        updateProgress(normalizedFeedback.isCorrect);
       }
 
       setFeedback(normalizedFeedback);
@@ -154,8 +183,35 @@ export function PracticeMode({
     }
   };
 
+  const updateProgress = async (isCorrect: boolean) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const newCorrectCount = correctCount + (isCorrect ? 1 : 0);
+    const newQuestionCount = questionCount + 1;
+    const masteryScore = (newCorrectCount / newQuestionCount) * 100;
+    const progressPercentage = Math.min(40 + (newQuestionCount * 5), 100);
+
+    await supabase
+      .from('user_progress')
+      .upsert({
+        user_id: session.user.id,
+        unit_id: unit.id,
+        practice_count: newQuestionCount,
+        correct_count: newCorrectCount,
+        mastery_score: masteryScore,
+        progress_percentage: progressPercentage,
+        status: progressPercentage >= 80 ? 'mastered' : 'in_progress',
+        mastered_at: progressPercentage >= 80 ? new Date().toISOString() : null,
+      });
+
+    setCorrectCount(newCorrectCount);
+    setQuestionCount(newQuestionCount);
+  };
+
   const handleNext = () => {
     setUserAnswer("");
+    setSelectedChoice(null);
     setFeedback(null);
     loadNextQuestion();
   };
@@ -167,7 +223,7 @@ export function PracticeMode({
     }, 2000);
   };
 
-  if (loading) {
+  if (loading || !question) {
     return (
       <div className="flex items-center justify-center h-64">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -210,25 +266,56 @@ export function PracticeMode({
       {/* 問題カード */}
       <Card>
         <CardContent className="pt-6 space-y-6">
-          <div className="prose prose-sm max-w-none">
-            <p className="text-lg leading-relaxed whitespace-pre-wrap">
-              {question.question}
-            </p>
-          </div>
+          <MathContent 
+            content={question.question}
+            className="text-lg leading-relaxed"
+          />
 
           {!feedback ? (
             <>
-              <Textarea
-                placeholder="回答を入力してください"
-                value={userAnswer}
-                onChange={(e) => setUserAnswer(e.target.value)}
-                className="min-h-[120px] text-base"
-                disabled={isSubmitting}
-              />
+              {question.type === 'choice' && question.choices ? (
+                <div className="space-y-3">
+                  {question.choices.map((choice, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setSelectedChoice(index)}
+                      disabled={isSubmitting}
+                      className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                        selectedChoice === index
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border hover:border-primary/50 hover:bg-accent'
+                      } ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                          selectedChoice === index
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border'
+                        }`}>
+                          {selectedChoice === index && <CheckCircle2 className="h-4 w-4" />}
+                        </div>
+                        <MathContent content={choice} className="flex-1" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <Textarea
+                  placeholder="回答を入力してください"
+                  value={userAnswer}
+                  onChange={(e) => setUserAnswer(e.target.value)}
+                  className="min-h-[120px] text-base"
+                  disabled={isSubmitting}
+                />
+              )}
+              
               <div className="flex gap-2">
                 <Button
                   onClick={handleSubmit}
-                  disabled={!userAnswer.trim() || isSubmitting}
+                  disabled={
+                    (question.type === 'choice' ? selectedChoice === null : !userAnswer.trim()) || 
+                    isSubmitting
+                  }
                   className="flex-1"
                   size="lg"
                 >
@@ -272,9 +359,10 @@ export function PracticeMode({
               {/* AIフィードバック */}
               <div className="bg-accent/50 rounded-lg p-4 space-y-2">
                 <p className="text-sm font-semibold">解説</p>
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {feedback.feedback}
-                </p>
+                <MathContent 
+                  content={feedback.feedback || feedback.explanation || ''}
+                  className="text-sm leading-relaxed"
+                />
               </div>
 
               <div className="flex gap-2">

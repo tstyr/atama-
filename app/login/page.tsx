@@ -20,6 +20,36 @@ function LoginContent() {
       setError(decodeURIComponent(errorParam));
     }
 
+    // URLフラグメント（#）からトークンを取得して処理
+    const handleHashFragment = async () => {
+      if (typeof window !== 'undefined' && window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        
+        if (accessToken && refreshToken) {
+          try {
+            // トークンをSupabaseセッションに設定
+            const { error } = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken,
+            });
+            
+            if (error) throw error;
+            
+            // 成功したら教科選択ページへ
+            router.push('/subjects');
+            return;
+          } catch (err) {
+            console.error('Error setting session:', err);
+            setError('セッションの設定に失敗しました');
+          }
+        }
+      }
+    };
+
+    handleHashFragment();
+
     const checkUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
@@ -48,7 +78,9 @@ function LoginContent() {
           ? `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`
           : 'http://localhost:3000/auth/callback';
       
-      const { error } = await supabase.auth.signInWithOAuth({
+      console.log('Redirect URL:', redirectUrl); // デバッグ用
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: redirectUrl,
@@ -56,10 +88,13 @@ function LoginContent() {
             access_type: 'offline',
             prompt: 'consent',
           },
+          skipBrowserRedirect: false,
         },
       });
       
       if (error) throw error;
+      
+      console.log('OAuth data:', data); // デバッグ用
     } catch (error) {
       console.error("Error logging in:", error);
       alert(`ログインに失敗しました: ${error instanceof Error ? error.message : '不明なエラー'}`);

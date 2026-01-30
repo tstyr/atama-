@@ -52,14 +52,34 @@ Vercelダッシュボードで以下の環境変数を設定してください�
 
 ## Supabase側の設定
 
-### 1. URL Configuration
+### 1. URL Configuration（重要！）
 
 Supabaseダッシュボード → Authentication → URL Configuration
 
-- **Site URL**: `https://atama-gilt.vercel.app`
-- **Redirect URLs** に追加:
-  - `https://atama-gilt.vercel.app/auth/callback`
-  - `http://localhost:3000/auth/callback` (ローカル開発用)
+#### Site URL
+本番環境のURLを設定してください：
+- **本番**: `https://atama-gilt.vercel.app`
+- **ローカル開発**: `http://localhost:3000`
+
+⚠️ **注意**: Site URLが`http://localhost:3000`のままだと、本番環境でもローカルホストにリダイレクトされます！
+
+#### Redirect URLs
+以下のURLを**すべて**追加してください：
+
+```
+https://atama-gilt.vercel.app/auth/callback
+http://localhost:3000/auth/callback
+https://atama-gilt.vercel.app/**
+http://localhost:3000/**
+```
+
+⚠️ **重要**: ワイルドカード（`**`）を含むURLも追加してください。これにより、すべてのパスからのリダイレクトが許可されます。
+
+#### Additional Redirect URLs（オプション）
+Preview環境用のURLも追加できます：
+```
+https://*.vercel.app/auth/callback
+```
 
 ### 2. Google OAuth設定
 
@@ -92,14 +112,30 @@ Supabaseダッシュボード → Authentication → Providers → Google
 2. 環境変数の値に`placeholder`が含まれていないか確認
 3. 再デプロイを実行
 
-### エラー: "このサイトにアクセスできません"
+### エラー: ローカルホストにリダイレクトされる
 
-**原因**: SupabaseのRedirect URLsが正しく設定されていない
+**原因**: SupabaseのSite URLがローカルホストに設定されている
 
 **解決方法**:
-1. Supabase → Authentication → URL Configuration を確認
-2. Redirect URLsに正しいURLが追加されているか確認
-3. Google Cloud ConsoleのリダイレクトURIを確認
+1. Supabase → Authentication → URL Configuration を開く
+2. **Site URL** を本番URLに変更: `https://atama-gilt.vercel.app`
+3. **Redirect URLs** に本番URLを追加: `https://atama-gilt.vercel.app/auth/callback`
+4. **Save** をクリック
+5. 数分待ってから再度ログインを試す
+
+⚠️ **重要**: Site URLは環境ごとに1つしか設定できません。本番環境を優先する場合は本番URLを、ローカル開発を優先する場合はローカルURLを設定してください。
+
+### エラー: URLフラグメント（#）でトークンが返される
+
+**原因**: 古い認証フロー（Implicit Flow）が使用されている
+
+**解決方法**:
+1. Supabase → Authentication → Settings を開く
+2. **Enable PKCE flow** がオンになっているか確認
+3. オフの場合はオンにする
+4. 再度ログインを試す
+
+現在のコードは両方のフローに対応していますが、PKCEフローの使用を推奨します。
 
 ### ログインボタンを押しても反応しない
 

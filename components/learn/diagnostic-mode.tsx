@@ -18,6 +18,7 @@ interface Evaluation {
   isCorrect: boolean;
   feedback: string;
   weakPoint?: string;
+  explanation?: string;
 }
 
 interface QuestionResult extends Question {
@@ -79,6 +80,14 @@ export function DiagnosticMode({
         currentQuestion.expectedAnswer
       );
 
+      // evaluateAnswerの戻り値の型に合わせて変換
+      const normalizedEvaluation: Evaluation = {
+        isCorrect: evaluation.isCorrect,
+        feedback: evaluation.explanation || evaluation.feedback || '',
+        weakPoint: evaluation.weakPoint,
+        explanation: evaluation.explanation,
+      };
+
       // 回答を記録
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
@@ -89,15 +98,15 @@ export function DiagnosticMode({
           question_type: 'diagnostic',
           question_text: currentQuestion.question,
           user_answer: userAnswer,
-          is_correct: evaluation.isCorrect,
-          ai_feedback: evaluation.feedback,
-          weak_point_identified: evaluation.weakPoint,
+          is_correct: normalizedEvaluation.isCorrect,
+          ai_feedback: normalizedEvaluation.feedback,
+          weak_point_identified: normalizedEvaluation.weakPoint,
           time_spent_seconds: 0,
         });
       }
 
-      setFeedback(evaluation);
-      setResults([...results, { ...currentQuestion, userAnswer, evaluation }]);
+      setFeedback(normalizedEvaluation);
+      setResults([...results, { ...currentQuestion, userAnswer, evaluation: normalizedEvaluation }]);
     } catch (error) {
       console.error('Error submitting answer:', error);
     } finally {

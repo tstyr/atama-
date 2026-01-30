@@ -85,9 +85,6 @@ const subjects = [
   },
 ];
 
-export default function SubjectsPage() {
-  const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
 interface SearchResult {
   subject: string;
   unit: string;
@@ -140,7 +137,7 @@ export default function SubjectsPage() {
     return () => clearTimeout(delaySearch);
   }, [searchQuery]);
 
-  const handleSubjectClick = (subjectId: string, subjectName: string) => {
+  const handleSubjectClick = (subjectName: string) => {
     router.push(`/map/${encodeURIComponent(subjectName)}`);
   };
 
@@ -211,7 +208,7 @@ export default function SubjectsPage() {
                 className={`cursor-pointer transition-all hover:shadow-lg ${
                   isHighlighted ? "ring-2 ring-primary shadow-xl" : ""
                 }`}
-                onClick={() => handleSubjectClick(subject.id, subject.name)}
+                onClick={() => handleSubjectClick(subject.name)}
               >
                 <CardHeader>
                   <div className="flex items-center gap-3">

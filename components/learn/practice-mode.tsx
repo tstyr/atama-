@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,11 +18,12 @@ interface Feedback {
   isCorrect: boolean;
   feedback: string;
   weakPoint?: string;
+  explanation?: string;
 }
 
 interface EvaluationResult {
   isCorrect: boolean;
-  feedback: string;
+  explanation: string;
   weakPoint?: string;
 }
 
@@ -48,7 +49,7 @@ export function PracticeMode({
   const [loading, setLoading] = useState(true);
   const [showCompletion, setShowCompletion] = useState(false);
 
-  const loadNextQuestion = async () => {
+  const loadNextQuestion = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -81,23 +82,30 @@ export function PracticeMode({
     } finally {
       setLoading(false);
     }
-  };
+  }, [unit.id, unit.subject, unit.unit_name, difficulty]);
 
   useEffect(() => {
     loadNextQuestion();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [loadNextQuestion]);
 
   const handleSubmit = async () => {
     if (!userAnswer.trim()) return;
 
     setIsSubmitting(true);
     try {
-      const evaluation: EvaluationResult = await evaluateAnswer(
+      const evaluationResult: EvaluationResult = await evaluateAnswer(
         question.question,
         userAnswer,
         question.expectedAnswer
       );
+
+      // EvaluationResultをFeedbackに変換
+      const normalizedFeedback: Feedback = {
+        isCorrect: evaluationResult.isCorrect,
+        feedback: evaluationResult.explanation,
+        weakPoint: evaluationResult.weakPoint,
+        explanation: evaluationResult.explanation,
+      };
 
       // 回答を記録
       const { data: { session } } = await supabase.auth.getSession();
@@ -109,14 +117,14 @@ export function PracticeMode({
           question_type: 'practice',
           question_text: question.question,
           user_answer: userAnswer,
-          is_correct: evaluation.isCorrect,
-          ai_feedback: evaluation.feedback,
-          weak_point_identified: evaluation.weakPoint,
+          is_correct: normalizedFeedback.isCorrect,
+          ai_feedback: normalizedFeedback.feedback,
+          weak_point_identified: normalizedFeedback.weakPoint,
           time_spent_seconds: 0,
         });
 
         // 進捗を更新
-        const newCorrectCount = correctCount + (evaluation.isCorrect ? 1 : 0);
+        const newCorrectCount = correctCount + (normalizedFeedback.isCorrect ? 1 : 0);
         const newQuestionCount = questionCount + 1;
         const masteryScore = (newCorrectCount / newQuestionCount) * 100;
         const progressPercentage = Math.min(40 + (newQuestionCount * 5), 100);
@@ -138,7 +146,7 @@ export function PracticeMode({
         setQuestionCount(newQuestionCount);
       }
 
-      setFeedback(evaluation);
+      setFeedback(normalizedFeedback);
     } catch (error) {
       console.error('Error submitting answer:', error);
     } finally {

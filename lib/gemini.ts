@@ -17,9 +17,9 @@ export async function generateDiagnosticQuestions(
   count: number = 5
 ) {
   const difficultyMap = {
-    basic: '基本用語の確認、教科書レベルの基礎',
-    standard: '共通テスト・入試標準レベル',
-    advanced: '難関大入試・応用・記述レベル'
+    beginner: '基礎レベル。用語の意味や基本的な概念を確認。',
+    intermediate: '標準レベル。基本的な計算や理解を確認。',
+    advanced: '応用レベル。深い理解や応用力を確認。'
   };
 
   const prompt = `あなたは高校の${subject}の専門教師です。
@@ -29,10 +29,21 @@ export async function generateDiagnosticQuestions(
 
 現在の理解度を診断するための問題を${count}問作成してください。
 
+【重要な指示】
+1. 問題は段階的に難しくする（1問目が最も簡単、最後が最も難しい）
+2. 最初の問題は必ず基本用語や定義の確認から始める
+3. 数式はLaTeX記法を使わず、読みやすい形式で書く
+
+【数式の書き方】
+- 分数: 1/2 または (分子)/(分母)
+- 平方根: √2 または sqrt(2)
+- 累乗: x^2 または x²
+- LaTeX記法は使わない（$や\\fracなど）
+
 以下のJSON形式で回答してください：
 [
   {
-    "question": "問題文",
+    "question": "問題文（数式はLaTeXを使わず、読みやすい形式で）",
     "expectedAnswer": "期待される回答のポイント"
   }
 ]
@@ -62,9 +73,9 @@ export async function generateLecture(
   difficulty: string
 ) {
   const difficultyMap = {
-    basic: '基本用語の確認、教科書レベルの基礎',
-    standard: '共通テスト・入試標準レベル',
-    advanced: '難関大入試・応用・記述レベル'
+    beginner: '中学生でも理解できる基礎レベル。専門用語は最小限に。',
+    intermediate: '高校基礎レベル。教科書の基本事項を理解している前提。',
+    advanced: '高校応用レベル。入試問題に対応できる深い理解。'
   };
 
   const prompt = `あなたは高校の${subject}の専門教師です。
@@ -73,21 +84,39 @@ export async function generateLecture(
 説明: ${description}
 難易度: ${difficultyMap[difficulty as keyof typeof difficultyMap]}
 
-atama+スタイルの簡潔な講義を作成してください。
+【重要な指示】
+この講義は「予備知識がない生徒」でも理解できるように作成してください。
 
 【講義の構成】
-1. **核心**（この単元で最も重要な1つのポイント）
-2. **3つのエッセンス**（覚えるべき重要事項を3つだけ）
-3. **図解**（記号や矢印を使ってテキストで表現）
-4. **よくある間違い**（1-2個）
+1. **この単元で学ぶこと**（1文で、中学生でも分かる言葉で）
 
-【重要】
-- 長々とした説明は不要
-- 要点だけを簡潔に
-- 箇条書きと図解を活用
-- Markdown形式で構造化
+2. **基礎から理解する**
+   - 専門用語を使う前に、日常的な言葉で説明
+   - 「なぜそうなるのか」を必ず説明
+   - 具体例を必ず1つ以上含める
 
-Markdown形式で回答してください。`;
+3. **重要ポイント3つ**
+   - 覚えるべき最重要事項を3つだけ
+   - それぞれに簡単な例を添える
+
+4. **よくある間違い**
+   - 初学者が陥りやすい間違いを1-2個
+   - なぜ間違えるのか、どう考えれば正しいのかを説明
+
+【数式の書き方】
+- 数式は必ず読みやすく書く
+- 分数: 1/2 または (分子)/(分母)
+- 平方根: √2 または sqrt(2)
+- 累乗: x^2 または x²
+- LaTeX記法は使わない（$や\\fracなど）
+
+【文章のルール】
+- 1文は短く（30文字以内を目安）
+- 専門用語の後には必ず（説明）を付ける
+- 「つまり」「例えば」「なぜなら」を積極的に使う
+- 箇条書きを活用
+
+Markdown形式で、見出しと箇条書きを使って構造化してください。`;
 
   const result = await model.generateContent(prompt);
   return result.response.text();
@@ -101,9 +130,9 @@ export async function generatePracticeQuestion(
   weakPoints?: string[]
 ) {
   const difficultyMap = {
-    basic: '基本用語の確認、教科書レベルの基礎',
-    standard: '共通テスト・入試標準レベル',
-    advanced: '難関大入試・応用・記述レベル'
+    beginner: '基礎レベル。公式や定義を確認する問題。',
+    intermediate: '標準レベル。公式を使って解く問題。',
+    advanced: '応用レベル。複数の知識を組み合わせる問題。'
   };
 
   const weakPointContext = weakPoints && weakPoints.length > 0
@@ -115,12 +144,26 @@ export async function generatePracticeQuestion(
 単元: ${unitName}
 難易度: ${difficultyMap[difficulty as keyof typeof difficultyMap]}${weakPointContext}
 
-演習問題を1問作成してください。
+【重要な指示】
+演習問題を1問作成してください。問題文は明確で、解答の方向性が分かるようにしてください。
+
+【数式の書き方】
+- 数式は必ず読みやすく書く
+- 分数: 1/2 または (分子)/(分母)
+- 平方根: √2 または sqrt(2)
+- 累乗: x^2 または x²
+- LaTeX記法は使わない（$や\\fracなど）
+
+【問題作成のルール】
+1. 問題文は具体的に（「次の値を求めよ」など）
+2. 必要な情報はすべて問題文に含める
+3. 計算問題の場合、数値は簡単なものにする
+4. 記述問題の場合、何を答えればよいか明確にする
 
 以下のJSON形式で回答してください：
 {
-  "question": "問題文",
-  "expectedAnswer": "期待される回答のポイント"
+  "question": "問題文（数式はLaTeXを使わず、読みやすい形式で）",
+  "expectedAnswer": "期待される回答のポイント（採点基準として使用）"
 }
 
 JSON形式のみで回答し、他の説明は不要です。`;
@@ -157,11 +200,17 @@ ${expectedAnswer}
 【生徒の回答】
 ${userAnswer}
 
+【評価の指針】
+1. 部分点を考慮する（完全に正解でなくても、理解している部分は評価）
+2. フィードバックは具体的に（何が良くて、何が足りないか）
+3. 励ましの言葉を含める
+4. 次に何を学べばよいか示唆する
+
 以下のJSON形式で回答してください：
 {
-  "isCorrect": true/false,
-  "feedback": "評価コメント（2-3文で簡潔に、励ましの言葉も含める）",
-  "weakPoint": "この回答から分かる理解不足の箇所（1文で）"
+  "isCorrect": true/false（部分的に正解の場合はfalse）,
+  "explanation": "詳しい解説（正解の場合も、なぜ正解なのか説明する。不正解の場合は、どこが違うか、正しい考え方は何かを説明。3-5文で。）",
+  "weakPoint": "この回答から分かる理解不足の箇所（1文で。正解の場合は空文字列）"
 }
 
 JSON形式のみで回答し、他の説明は不要です。`;
@@ -172,7 +221,14 @@ JSON形式のみで回答し、他の説明は不要です。`;
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+      const parsed = JSON.parse(jsonMatch[0]);
+      // explanationをfeedbackとしても使えるようにする
+      return {
+        isCorrect: parsed.isCorrect,
+        explanation: parsed.explanation,
+        feedback: parsed.explanation, // 互換性のため
+        weakPoint: parsed.weakPoint || ''
+      };
     }
   } catch (e) {
     console.error('Failed to parse AI response:', e);
@@ -180,7 +236,8 @@ JSON形式のみで回答し、他の説明は不要です。`;
   
   return {
     isCorrect: false,
-    feedback: '評価に失敗しました。',
+    explanation: '評価に失敗しました。もう一度お試しください。',
+    feedback: '評価に失敗しました。もう一度お試しください。',
     weakPoint: ''
   };
 }

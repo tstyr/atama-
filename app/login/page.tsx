@@ -33,6 +33,14 @@ function LoginContent() {
     try {
       setLoading(true);
       
+      // 環境変数のチェック
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      if (!supabaseUrl || supabaseUrl.includes('placeholder')) {
+        alert('Supabase環境変数が設定されていません。管理者に連絡してください。');
+        setLoading(false);
+        return;
+      }
+      
       // リダイレクトURLを取得（認証コールバックルートを使用）
       const redirectUrl = typeof window !== 'undefined' 
         ? `${window.location.origin}/auth/callback`

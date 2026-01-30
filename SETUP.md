@@ -38,11 +38,15 @@ Supabaseダッシュボードで以下のSQLを順番に実行：
 
 #### Supabase側の設定
 
-1. Supabaseダッシュボード → Authentication → Providers → Google
-2. Google OAuth を有効化
+1. Supabaseダッシュボード → Authentication → URL Configuration
+2. **Site URL** を設定：
+   - ローカル: `http://localhost:3000`
+   - 本番: `https://your-app.vercel.app`
 3. **Redirect URLs** に以下を追加：
    - ローカル: `http://localhost:3000/auth/callback`
-   - 本番: `https://your-domain.vercel.app/auth/callback`
+   - 本番: `https://your-app.vercel.app/auth/callback`
+
+4. Authentication → Providers → Google を有効化
 
 #### Google Cloud Console側の設定
 

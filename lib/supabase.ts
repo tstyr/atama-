@@ -1,17 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
 
-// 環境変数のチェック（ビルド時にエラーを防ぐ）
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key';
+// 環境変数の取得
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL && typeof window !== 'undefined') {
-  console.warn('NEXT_PUBLIC_SUPABASE_URL is not set');
-}
-if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY && typeof window !== 'undefined') {
-  console.warn('NEXT_PUBLIC_SUPABASE_ANON_KEY is not set');
+// 環境変数のバリデーション
+if (!supabaseUrl || !supabaseAnonKey) {
+  if (typeof window !== 'undefined') {
+    console.error('Supabase environment variables are not set properly');
+    console.error('NEXT_PUBLIC_SUPABASE_URL:', supabaseUrl ? 'Set' : 'Missing');
+    console.error('NEXT_PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'Set' : 'Missing');
+  }
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Supabaseクライアントの作成（フォールバック値を使用してビルドエラーを防ぐ）
+export const supabase = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-key'
+);
 
 export type Profile = {
   id: string;

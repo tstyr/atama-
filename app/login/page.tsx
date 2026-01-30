@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { GraduationCap, AlertCircle } from "lucide-react";
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -102,5 +102,27 @@ export default function LoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center space-y-4">
+            <div className="flex justify-center">
+              <div className="p-3 bg-primary/10 rounded-full">
+                <GraduationCap className="h-12 w-12 text-primary" />
+              </div>
+            </div>
+            <CardTitle className="text-3xl">SmartTutor AI</CardTitle>
+            <CardDescription className="text-base">読み込み中...</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    }>
+      <LoginContent />
+    </Suspense>
   );
 }

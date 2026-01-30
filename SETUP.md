@@ -34,13 +34,31 @@ Supabaseダッシュボードで以下のSQLを順番に実行：
 1. **スキーマ作成**: `supabase-schema.sql`
 2. **プリセット単元挿入**: `scripts/seed-units.sql`
 
-### 3. Google OAuth設定（オプション）
+### 3. Google OAuth設定（重要）
 
-Supabaseダッシュボード → Authentication → Providers → Google
+#### Supabase側の設定
 
-1. Google Cloud Consoleでプロジェクト作成
-2. OAuth 2.0クライアントID作成
-3. 認証情報をSupabaseに設定
+1. Supabaseダッシュボード → Authentication → Providers → Google
+2. Google OAuth を有効化
+3. **Redirect URLs** に以下を追加：
+   - ローカル: `http://localhost:3000/auth/callback`
+   - 本番: `https://your-domain.vercel.app/auth/callback`
+
+#### Google Cloud Console側の設定
+
+1. [Google Cloud Console](https://console.cloud.google.com/) でプロジェクト作成
+2. 「APIとサービス」→「認証情報」→「OAuth 2.0 クライアントID」作成
+3. **承認済みのリダイレクトURI** に以下を追加：
+   - Supabaseのコールバック: `https://your-project.supabase.co/auth/v1/callback`
+4. クライアントIDとシークレットをSupabaseに設定
+
+#### Vercel環境変数の設定
+
+Vercelダッシュボード → Settings → Environment Variables に以下を追加：
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_GEMINI_API_KEY`
+- `NEXT_PUBLIC_SITE_URL` (例: `https://your-app.vercel.app`)
 
 ### 4. 依存関係のインストール
 
